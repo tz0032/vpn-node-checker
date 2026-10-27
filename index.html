@@ -1,0 +1,48 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VPN节点检查器｜GPT & Muse</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f7fa;margin:0;color:#172033}
+.wrap{max-width:760px;margin:auto;padding:20px}.card{background:#fff;border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 3px 16px #0000000d}
+h1{margin:4px 0 8px;font-size:26px}.sub,small{color:#667085}input{width:100%;box-sizing:border-box;padding:13px;border:1px solid #d0d5dd;border-radius:12px;font-size:16px}
+button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:600;background:#111827;color:#fff}button:disabled{opacity:.5}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.metric{background:#f8fafc;border-radius:14px;padding:14px}.num{font-size:25px;font-weight:700;margin-top:5px}
+.bar{height:10px;background:#e4e7ec;border-radius:99px;overflow:hidden}.fill{height:100%;width:0;background:#111827}.history{width:100%;border-collapse:collapse}.history td,.history th{padding:9px 6px;border-bottom:1px solid #eee;text-align:left}
+</style></head><body><div class="wrap">
+<div class="card"><h1>🌐 VPN 节点检查器</h1><div class="sub">GPT / Muse 日常使用综合测速</div>
+<div style="margin-top:16px"><input id="name" placeholder="节点名称，例如：日本东京 01"></div>
+<div class="row" style="margin-top:12px"><button id="test">开始综合检测</button><button id="clear" style="background:#eef2f6;color:#344054">清空记录</button></div></div>
+<div class="card"><h3>当前节点</h3><div id="status">等待检测…</div><div class="grid" style="margin-top:12px">
+<div class="metric">平均响应<div class="num" id="lat">—</div></div><div class="metric">抖动<div class="num" id="jitter">—</div></div>
+<div class="metric">成功率<div class="num" id="loss">—</div></div><div class="metric">综合评分<div class="num" id="score">—</div></div></div>
+<div style="margin-top:14px"><div class="bar"><div class="fill" id="fill"></div></div></div></div>
+<div class="card"><h3>连通性</h3><div id="targets">尚未测试</div></div>
+<div class="card"><h3>当前公网 IP</h3><div id="ip">尚未查询</div>
+<small>IP“纯净度/住宅属性”不能仅靠浏览器准确判断；这里不伪造评分，需要专业 IP 信誉数据库复核。</small></div>
+<div class="card"><h3>测试记录</h3><table class="history"><thead><tr><th>节点</th><th>延迟</th><th>抖动</th><th>成功率</th><th>评分</th></tr></thead><tbody id="history"></tbody></table></div>
+<div class="card"><small>说明：浏览器网页无法直接执行传统 ICMP ping，这里测的是 HTTPS 请求往返时间，更接近日常网页、GPT 等应用的连接体验。每个节点建议连续测试 2–3 次再比较。</small></div>
+</div>
+<script>
+const targets=[
+["Cloudflare","https://www.cloudflare.com/cdn-cgi/trace"],
+["Google","https://www.google.com/generate_204"],
+["OpenAI","https://chatgpt.com/robots.txt"],
+["Meta","https://www.meta.com/robots.txt"]];
+const $=x=>document.getElementById(x);let H=JSON.parse(localStorage.getItem("vpnHistory")||"[]");
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+function render(){ $("history").innerHTML=H.slice().reverse().map(x=>`<tr><td>${esc(x.name)}</td><td>${x.lat} ms</td><td>${x.jit} ms</td><td>${x.ok}%</td><td><b>${x.score}</b></td></tr>`).join("")}
+async function t(url){let s=performance.now();try{await fetch(url+"?t="+Date.now(),{mode:"no-cors",cache:"no-store"});return Math.round(performance.now()-s)}catch(e){return null}}
+async function run(){
+$("test").disabled=true;$("status").textContent="正在检测，请保持当前 VPN 节点不变…";$("targets").textContent="检测中…";$("ip").textContent="查询中…";
+let R=[];for(let z of targets){let a=[];for(let i=0;i<2;i++){let v=await t(z[1]);if(v!==null)a.push(v)}R.push([z[0],a.length?Math.round(a.reduce((a,b)=>a+b,0)/a.length):null])}
+let a=[];for(let i=0;i<5;i++){let v=await t(targets[0][1]);if(v!==null)a.push(v)}
+let avg=a.length?a.reduce((x,y)=>x+y,0)/a.length:null,jit=a.length>1?Math.round(Math.sqrt(a.reduce((x,y)=>x+(y-avg)**2,0)/a.length)):null,ok=Math.round(a.length/5*100);
+let lat=R.filter(x=>x[1]!=null),overall=lat.length?Math.round(lat.reduce((x,y)=>x+y[1],0)/lat.length):null;
+let score=overall==null?0:Math.max(0,Math.min(100,Math.round(100-Math.max(0,overall-30)*.45-Math.max(0,jit||0)*.5-(100-ok)*.7)));
+$("lat").textContent=overall==null?"失败":overall+" ms";$("jitter").textContent=jit==null?"失败":jit+" ms";$("loss").textContent=ok+"%";$("score").textContent=score;$("fill").style.width=score+"%";
+$("status").textContent=score>=85?"优秀：适合日常 GPT / Muse":score>=70?"良好：基本适合":score>=50?"一般：建议继续比较其他节点":"较差：建议更换节点";
+$("targets").innerHTML=R.map(x=>`<div style="padding:8px 0;border-bottom:1px solid #eee"><b>${x[0]}</b>：${x[1]==null?"连接失败":x[1]+" ms"}</div>`).join("");
+try{let ip=await fetch("https://api.ipify.org?format=json").then(r=>r.json());$("ip").innerHTML="<b>"+esc(ip.ip)+"</b>"}catch(e){$("ip").textContent="无法获取"};
+let name=$("name").value.trim()||"未命名节点";H.push({name,lat:overall??"失败",jit:jit??"失败",ok,score});H=H.slice(-30);localStorage.setItem("vpnHistory",JSON.stringify(H));render();$("test").disabled=false}
+$("test").onclick=run;$("clear").onclick=()=>{H=[];localStorage.removeItem("vpnHistory");render()};render();
+</script></body></html>
